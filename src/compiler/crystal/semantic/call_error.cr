@@ -485,19 +485,31 @@ class Crystal::Call
       splat = a_def.splat_index.as(Int32)
     end
 
+    obj = @obj
+    generic_index = 0
     if arg_types.size > 0
       last_def_arg : Arg = a_def.args[0].as(Arg)
       arg_types.each_with_index do |arg_type, i|
-        if a_def.args.size > i && a_def.args[i].is_a?(Arg)
+        if has_splat && last_def_arg && i >= splat
+          if obj.is_a?(Generic)
+            if last_def_arg.restriction.is_a?(Splat)
+              if obj.type_vars[generic_index].to_s != arg_type.to_s
+                arguments_type_mismatch << ArgumentTypeMismatch.new(
+                  index_or_name: i,
+                  expected_type: obj.type_vars[generic_index],
+                  actual_type: arg_type.remove_literal,
+                  extra_types: nil,
+                )
+              end
+              generic_index += 1
+            end
+          else
+            check_argument_type_mismatch(last_def_arg, i, arg_type, match_context, arguments_type_mismatch)
+          end
+        elsif a_def.args.size > i && a_def.args[i].is_a?(Arg)
           def_arg = a_def.args[i].as(Arg)
           last_def_arg = def_arg
           check_argument_type_mismatch(def_arg, i, arg_type, match_context, arguments_type_mismatch)
-        else
-          if has_splat && last_def_arg
-            if i >= splat
-              check_argument_type_mismatch(last_def_arg, i, arg_type, match_context, arguments_type_mismatch)
-            end
-          end
         end
       end
     end
