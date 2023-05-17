@@ -111,6 +111,7 @@ class Crystal::Call
       inner_exception = TypeException.for_node(similar_def, inner_msg)
     end
 
+
     # Check why each def can't be called with this Call (what's the error?)
     call_errors = defs.map do |a_def|
       compute_call_error_reason(owner, a_def, arg_types, named_args_types)
@@ -448,9 +449,6 @@ class Crystal::Call
       return ExtraNamedArguments.new(extra_named_argument_names, extra_named_argument_similar_names)
     end
 
-    # For now let's not deal with splats
-    return if a_def.splat_index
-
     a_def_owner = a_def.owner
 
     # This is the actual instantiated type where the method was instantiated
@@ -481,11 +479,27 @@ class Crystal::Call
 
     arguments_type_mismatch = [] of ArgumentTypeMismatch
 
-    arg_types.each_with_index do |arg_type, i|
-      def_arg = a_def.args[i]?
-      next unless def_arg
+    has_splat = a_def.splat_index.is_a?(Int32)
+    splat = 0
+    if has_splat
+      splat = a_def.splat_index.as(Int32)
+    end
 
-      check_argument_type_mismatch(def_arg, i, arg_type, match_context, arguments_type_mismatch)
+    if arg_types.size > 0
+      last_def_arg : Arg = a_def.args[0].as(Arg)
+      arg_types.each_with_index do |arg_type, i|
+        if a_def.args.size > i && a_def.args[i].is_a?(Arg)
+          def_arg = a_def.args[i].as(Arg)
+          last_def_arg = def_arg
+          check_argument_type_mismatch(def_arg, i, arg_type, match_context, arguments_type_mismatch)
+        else
+          if has_splat && last_def_arg
+            if i >= splat
+              check_argument_type_mismatch(last_def_arg, i, arg_type, match_context, arguments_type_mismatch)
+            end
+          end
+        end
+      end
     end
 
     named_args_types.try &.each do |named_arg|
